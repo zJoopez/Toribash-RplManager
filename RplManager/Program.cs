@@ -91,6 +91,7 @@ namespace RplManager
         }
         public static string setCustomPath(IConfiguration configuration, string jsonFilePath)
         {
+            //Requests new path as input and returns given string
             Console.WriteLine("Couldn't find replays.");
             Console.WriteLine("Please enter custom path for replay folder");
             string ans;
@@ -207,6 +208,7 @@ namespace RplManager
                         currentFrame = Convert.ToInt32(tmpSplit[1].Trim(';'));
                         if (currentFrame > endFrame)
                         {
+                            //Sets allow write back to false and breaks to skip other conditions
                             allowWrite = false;
                             break; 
                         }
