@@ -207,6 +207,7 @@ namespace RplManager
                         currentFrame = Convert.ToInt32(tmpSplit[1].Trim(';'));
                         if (currentFrame > endFrame)
                         {
+                            //Sets allow write back to false and breaks to skip other conditions
                             allowWrite = false;
                             break; 
                         }
