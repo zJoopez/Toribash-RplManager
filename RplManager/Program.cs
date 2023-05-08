@@ -5,53 +5,56 @@ using System.Xml;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
-
+using System.ComponentModel;
 
 namespace RplManager
 {
     internal class Program
     {
-        private int[] startJointsArray;
+        private string newFilePath = string.Empty;
+        private int[] statesOfJointsArray;
         public Program()
         {
-            const int size = 20;
-            startJointsArray = new int[size];
-            for (int i = 0; i < size; i++)
+            //Creates array of size 20 where each value is 4.
+            //Each value in array represents state of joint (default is 4)
+            //There are 20 joints and in rpl files they use numbers 0-19 as labels, so index X = joint X
+            const int ammountOfJoints = 20;
+            statesOfJointsArray = new int[ammountOfJoints];
+            for (int i = 0; i < ammountOfJoints; i++)
             {
-                startJointsArray[i] = 4;
+                statesOfJointsArray[i] = 4;
             }
         }
-
         static void Main(string[] args)
         {
             Program myObject = new Program();
             string path = setup();
-            myObject.cutter2(path);
-            Console.ReadLine();
+            myObject.replayManagerStart(path);
         }
         public static string setup()
         {
-            // Set the path to the JSON file
+            //Set the path to the JSON file
             string jsonFilePath = "appsettings.json";
 
-            // Create the JSON file with an empty object if it doesn't exist
+            //Create the JSON file with an empty object if it doesn't exist
             if (!File.Exists(jsonFilePath))
             {
                 File.WriteAllText(jsonFilePath, "{}");
             }
 
-            // Create a ConfigurationBuilder and add the JSON file as a source
+            //Create a ConfigurationBuilder and add the JSON file as a source
             var builder = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile(jsonFilePath, optional: false, reloadOnChange: true);
 
-            // Build the configuration
+            //Build the configuration
             var configuration = builder.Build();
 
            return verifyReplayFolderPath(configuration, jsonFilePath);
         }
         public static string verifyReplayFolderPath(IConfiguration configuration, string jsonFilePath)
         {
+            //Includes methods for setting a path and verifys path by checking there are rpl files in it.
             string rplFolderName = "replay";
             string applicationPath = AppDomain.CurrentDomain.BaseDirectory;
             string rplFolderPath = configuration["Path"] ?? string.Empty;
@@ -59,14 +62,14 @@ namespace RplManager
             bool rplsFound = false;
             while (rplsFound == false)
             {
-                // Tarkistetaan onko sovellus replay kansiossa tai sen alakansioissa
-                // Jos mahdollista, erotetaan kansion polku aplikaation polusta
+                //Checks if application is in subfolders of replay folder
                 if (rplFolderPath == string.Empty && applicationPath.Contains(rplFolderName))
                 {
+                    //Cuts path for replay folder from app path if possible
                     string[] subStrings = applicationPath.Split(rplFolderName);
                     rplFolderPath = subStrings[0] + rplFolderName;
                 }
-                //testataan löytyykö rpl tiedostoja kansiosta
+                //Searches for .rpl files in current path.
                 try
                 {
                     rplArray = Directory.GetFiles(rplFolderPath, "*.rpl", SearchOption.AllDirectories);
@@ -81,7 +84,7 @@ namespace RplManager
                 {
                     Console.WriteLine("Invalid file path");
                 }
-                //kun muu ei toimi pyydetään polku ja yritetään uudestaan
+                //Requests setting custom path for another attempt
                 rplFolderPath = setCustomPath(configuration, jsonFilePath);
             }
             return rplFolderPath;
@@ -110,14 +113,17 @@ namespace RplManager
                 }
             }
         }
-        public void cutter2(string path)
+        public void replayManagerStart(string path)
         {
+            //Provides options and takes inputs required for cutting and combining operations
             string src;
             int endFrame;
             int startFrame = 0;
             int currentframe = 0;
             bool firstIteration = true;
-            while (true) 
+            bool proceed = true;
+            int tmpInt;
+            while (proceed) 
             {
                 Console.Write("\nEnter name of ");
                 if (firstIteration)
@@ -133,18 +139,35 @@ namespace RplManager
                 startFrame = retNumb();
                 Console.WriteLine("\nSelect end frame");
                 endFrame = retNumb();
-                currentframe = writeReplay(src, startFrame, endFrame, currentframe, firstIteration);
+                currentframe = cutAndCombine(src, startFrame, endFrame, currentframe, firstIteration);
                 firstIteration = false;
+                Console.WriteLine("Options");
+                Console.WriteLine("1. Continue replay");
+                Console.WriteLine("0. Exit");
+                while (true)
+                {
+                    tmpInt = retNumb();
+                    if(tmpInt == 0)
+                    {
+                        proceed = false;
+                        break;
+                    }
+                    if(tmpInt == 1)
+                    {
+                        break;
+                    }
+                }
             }
         }
-        //kirjoittaa pyydetyn osion tiedostoon ja palauttaa viimeisen kirjotetun framen
-        public int writeReplay(string src, int startFrame, int endFrame, int previousFrame, bool firstIteration)
+        public int cutAndCombine(string src, int startFrame, int endFrame, int previousFrame, bool firstIteration)
         {
-            //objekti voisi olla tehokkaampi jointteihin
-            int[] p0Joints = startJointsArray;
-            int[] p1Joints = startJointsArray;
-            int[] p2Joints = startJointsArray;
-            int[] p3Joints = startJointsArray;
+            //Writes requested segment into new file
+            //Returns last written frame to allow continue writing from last frame
+            //TODO reduce repeat.. object instead?
+            int[] p0Joints = statesOfJointsArray;
+            int[] p1Joints = statesOfJointsArray;
+            int[] p2Joints = statesOfJointsArray;
+            int[] p3Joints = statesOfJointsArray;
 
             string line;
             bool allowWrite = false;
@@ -152,13 +175,14 @@ namespace RplManager
             int currentFrame = 0;
             int lastWrittenFrame = 0;
             bool firstFrameCatched = false;
-            string newFilePath = src.Replace(".rpl", "") + "-cut.rpl";
-            StreamWriter writer;
-            // varmistaa että aloitetaaan tyhjästä tai luo puuttuvan tiedoston
+            StreamWriter writer;  
             if (firstIteration)
             {
+                newFilePath = src.Replace(".rpl", "") + "-cut.rpl";
+                //Resets file or creates new one if it's missing
                 writer = new StreamWriter(newFilePath);
-            } 
+            }
+            //Continues writing to existing file
             else
             {
                 writer = File.AppendText(newFilePath);
@@ -210,7 +234,9 @@ namespace RplManager
                     {
                         tmpSplit = line.Split("; ");
                         tmpSplit = tmpSplit[1].Split(" ");
-                        //TODO vähennä toistoa
+                        //TODO
+                        // 1. reduce repeat.. replace with function?
+                        // 2. optimize.. no need to save joints to array after first frame written.
                         if (line.Contains("JOINT 0"))
                         {
                             for (int i = 0; i < tmpSplit.Length; i = i + 2)
@@ -269,6 +295,8 @@ namespace RplManager
         }
         public static string retRplPath(string path)
         {
+            //Controls for selecting a replay file
+            //Returns path of selected file
             string ans1;
             while (true)
             {
@@ -277,11 +305,13 @@ namespace RplManager
                 string[] files = Directory.GetFiles(path, ans1, SearchOption.AllDirectories);
                 int count = files.Count();
                 Console.WriteLine(count + " Matches found");
+                //if single match, returns it
                 if (count == 1 && files[0].Contains(".rpl"))
                 {
                     Console.WriteLine("rpl found at " + files[0]);
                     return files[0];
                 }
+                //Provides list of files to select from if multiple matches
                 if (count > 1)
                 {
                     Console.WriteLine("Please choose one replay");
@@ -297,6 +327,9 @@ namespace RplManager
                         }
                     }
                     Console.WriteLine("0. Search again");
+                    //Compares input to options provided above
+                    //Returns path of selected file if there's match
+                    //Value 0 allows exiting to original while loop for new search
                     int indx;
                     while (true)
                     {
@@ -324,6 +357,7 @@ namespace RplManager
         }
         public static int retNumb()
         {
+            //Converts and returns input as integer.
             string ans1;
             while (true)
             {
@@ -339,15 +373,16 @@ namespace RplManager
                 }
             }
         }
-        public static string jointsToStr(int[] arr, string line)
+        public static string jointsToStr(int[] jointStates, string line)
         {
+            //Creates modified string of line with state of every joint
             string[] tmparr = new string[2];
             string tmpstr;
             tmparr = line.Split(";");
             tmpstr = tmparr[0] + ";";
-            for (int i = 0; i < arr.Length; i++)
+            for (int i = 0; i < jointStates.Length; i++)
             {
-                tmpstr += " " + i + " " + arr[i];
+                tmpstr += " " + i + " " + jointStates[i];
             }
             return tmpstr;
         }
