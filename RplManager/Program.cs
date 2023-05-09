@@ -6,24 +6,20 @@ using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using System.ComponentModel;
+using System.Data;
 
 namespace RplManager
 {
     internal class Program
     {
         private string newFilePath = string.Empty;
-        private int[] statesOfJointsArray;
+        private int[][] jointStatesOfPlayers;
         public Program()
         {
             //Creates array of size 20 where each value is 4.
             //Each value in array represents state of joint (default is 4)
             //There are 20 joints and in rpl files they use numbers 0-19 as labels, so index X = joint X
-            const int ammountOfJoints = 20;
-            statesOfJointsArray = new int[ammountOfJoints];
-            for (int i = 0; i < ammountOfJoints; i++)
-            {
-                statesOfJointsArray[i] = 4;
-            }
+            jointStatesOfPlayers = new int[4][];
         }
         static void Main(string[] args)
         {
@@ -163,12 +159,7 @@ namespace RplManager
         {
             //Writes requested segment into new file
             //Returns last written frame to allow continue writing from last frame
-            //TODO reduce repeat.. object instead?
-            int[] p0Joints = statesOfJointsArray;
-            int[] p1Joints = statesOfJointsArray;
-            int[] p2Joints = statesOfJointsArray;
-            int[] p3Joints = statesOfJointsArray;
-
+            jointsToDefaultState();
             string line;
             bool allowWrite = false;
             string[] tmpSplit = new string[50];
@@ -233,53 +224,13 @@ namespace RplManager
                     if (line.Contains("JOINT "))
                     {
                         tmpSplit = line.Split("; ");
-                        tmpSplit = tmpSplit[1].Split(" ");
-                        //TODO
-                        // 1. reduce repeat.. replace with function?
-                        // 2. optimize.. no need to save joints to array after first frame written.
-                        if (line.Contains("JOINT 0"))
+                        int c = (int)Char.GetNumericValue((tmpSplit[0])[(tmpSplit[0]).Length - 1]);
+                        tmpSplit = tmpSplit[1].Split(" ");           
+                        
+                        updatePlayerJointStates(c, jointStatesOfPlayers, tmpSplit);
+                        if (allowWrite && currentFrame == startFrame)
                         {
-                            for (int i = 0; i < tmpSplit.Length; i = i + 2)
-                            {
-                                p0Joints[int.Parse(tmpSplit[i])] = int.Parse(tmpSplit[i + 1]);
-                            }
-                            if (allowWrite && currentFrame == startFrame) 
-                            {
-                                line = (jointsToStr(p0Joints, line));
-                            }
-                        }
-                        if (line.Contains("JOINT 1"))
-                        {
-                            for (int i = 0; i < tmpSplit.Length; i = i + 2)
-                            {
-                                p1Joints[int.Parse(tmpSplit[i])] = int.Parse(tmpSplit[i + 1]);
-                            }
-                            if (allowWrite && currentFrame == startFrame)
-                            {
-                                line = (jointsToStr(p1Joints, line));
-                            }
-                        }
-                        if (line.Contains("JOINT 2"))
-                        {
-                            for (int i = 0; i < tmpSplit.Length; i = i + 2)
-                            {
-                                p2Joints[int.Parse(tmpSplit[i])] = int.Parse(tmpSplit[i + 1]);
-                            }
-                            if (allowWrite && currentFrame == startFrame)
-                            {
-                                line = (jointsToStr(p2Joints, line));
-                            }
-                        }
-                        if (line.Contains("JOINT 3"))
-                        {
-                            for (int i = 0; i < tmpSplit.Length; i = i + 2)
-                            {
-                                p3Joints[int.Parse(tmpSplit[i])] = int.Parse(tmpSplit[i + 1]);
-                            }
-                            if (allowWrite && currentFrame == startFrame)
-                            {
-                                line = (jointsToStr(p3Joints, line));
-                            }
+                            line = (jointsToStr(jointStatesOfPlayers[c], line));
                         }
                     }
                     if (allowWrite == true)
@@ -292,6 +243,14 @@ namespace RplManager
                 Console.WriteLine("last frame in replay was " + lastWrittenFrame);
                 return previousFrame + lastWrittenFrame - startFrame;
             }
+        }
+        public void updatePlayerJointStates(int c, int[][] jointsOfPlayers, string[] jointChanges)
+        {
+            for (int i = 0; i < jointChanges.Length; i = i + 2)
+            {
+                jointsOfPlayers[c][int.Parse(jointChanges[i])] = int.Parse(jointChanges[i + 1]);
+            }
+            
         }
         public static string retRplPath(string path)
         {
@@ -386,6 +345,16 @@ namespace RplManager
             }
             return tmpstr;
         }
-
+        public void jointsToDefaultState()
+        {
+            for (int i = 0; i < jointStatesOfPlayers.Length; i++)
+            {
+                jointStatesOfPlayers[i] = new int[20];
+                for (int j = 0; j < jointStatesOfPlayers[i].Length; j++)
+                {
+                    jointStatesOfPlayers[i][j] = 4;
+                }
+            }
+        }
     }
 }
