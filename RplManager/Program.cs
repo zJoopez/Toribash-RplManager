@@ -14,12 +14,15 @@ namespace RplManager
     {
         private string newFilePath = string.Empty;
         private int[][] jointStatesOfPlayers;
+        private int[][] gripStatesOfPlayers;
         public Program()
         {
-            //Creates array of size 20 where each value is 4.
-            //Each value in array represents state of joint (default is 4)
-            //There are 20 joints and in rpl files they use numbers 0-19 as labels, so index X = joint X
+            //Jagged array for storing joint states of players
             jointStatesOfPlayers = new int[4][];
+            jaggedArrayCreateEmptyArray(jointStatesOfPlayers, 20);
+            //Jagged array for storing grip states of players
+            gripStatesOfPlayers = new int[4][];
+            jaggedArrayCreateEmptyArray(gripStatesOfPlayers, 2);
         }
         static void Main(string[] args)
         {
@@ -159,13 +162,15 @@ namespace RplManager
         {
             //Writes requested segment into new file
             //Returns last written frame to allow continue writing from last frame
-            jointsToDefaultState();
+            jaggedArrayResetValues(jointStatesOfPlayers, 4);
+            jaggedArrayResetValues(gripStatesOfPlayers, 2);
             string line;
             bool allowWrite = false;
             string[] tmpSplit = new string[50];
             int currentFrame = 0;
             int lastWrittenFrame = 0;
-            bool firstFrameCatched = false;
+            bool writeInfo = true;
+            bool addStartGripStates = true;
             StreamWriter writer;  
             if (firstIteration)
             {
@@ -181,15 +186,15 @@ namespace RplManager
             using (writer)
             using (StreamReader reader = new StreamReader(src))
             {
-                while ((line = reader.ReadLine() ?? string.Empty) != string.Empty && currentFrame < endFrame)
+                while ((line = reader.ReadLine() ?? string.Empty) != string.Empty)
                 {
-                    if (firstIteration == true)
+                    if (writeInfo && firstIteration)
                     {
                         allowWrite = true;
                     }
                     if (line.Contains("FRAME 0;") && startFrame > 0)
                     {
-                        firstIteration = false;
+                        writeInfo = false;
                         allowWrite = false;
                     }
                     if (line.Contains("FRAME "))
@@ -199,20 +204,23 @@ namespace RplManager
                         if (currentFrame > endFrame)
                         {
                             allowWrite = false;
+                            lastWrittenFrame = currentFrame;
                             break; 
                         }
                         else
                         {
                             lastWrittenFrame = currentFrame;
                         }
-                        if (currentFrame >= startFrame)
+                        if (currentFrame > startFrame)
                         {
-                            if (!firstFrameCatched)
+                            allowWrite = true;
+                            //Sets closest frame to start frame as first frame to prevent missing frame 0
+                            if (firstIteration)
                             {
                                 startFrame = currentFrame;
-                                firstFrameCatched = true;
-                                allowWrite = true;
+                                firstIteration = false;
                             }
+                            //Calculates which frame are we on and updates line accordingly
                             tmpSplit[1] = (previousFrame + currentFrame - startFrame).ToString() + ';';
                             line = "";
                             foreach (string s2 in tmpSplit)
@@ -223,34 +231,46 @@ namespace RplManager
                     }
                     if (line.Contains("JOINT "))
                     {
-                        tmpSplit = line.Split("; ");
-                        int c = (int)Char.GetNumericValue((tmpSplit[0])[(tmpSplit[0]).Length - 1]);
-                        tmpSplit = tmpSplit[1].Split(" ");           
-                        
-                        updatePlayerJointStates(c, jointStatesOfPlayers, tmpSplit);
-                        if (allowWrite && currentFrame == startFrame)
+                        string tmpString = updateJaggedArray(line, jointStatesOfPlayers, false);
+                        if (currentFrame == startFrame)
                         {
-                            line = (jointsToStr(jointStatesOfPlayers[c], line));
+                            line = tmpString;
                         }
                     }
-                    if (allowWrite == true)
+                    if (line.Contains("GRIP "))
+                    {
+                        updateJaggedArray(line, gripStatesOfPlayers, true);
+                    }
+                    if (allowWrite)
                     {
                         writer.WriteLine(line);
                     }
+                    //Writes grip states on first frame to carry over grips toggled before this frame
+                    if (currentFrame > startFrame & addStartGripStates)
+                    {
+                        string tmpLine;
+                        for (int i = 0; i < gripStatesOfPlayers.Length; i++)
+                        {
+                            tmpLine = "GRIP " + i + ";";
+                            for (int j = 0; j < gripStatesOfPlayers[i].Length; j++)
+                            {
+                                tmpLine += " " + gripStatesOfPlayers[i][j];
+                            }
+                            writer.WriteLine(tmpLine);
+                        }
+                        addStartGripStates = false;
+                    }
                 }
+                //Disables all grips on last frame (prevents bugs if grab target changes)
+                for (int i = 0; i < 4; i++)
+                {
+                    writer.WriteLine("GRIP " + i + "; 2 2");
+                }              
                 writer.Close();
                 reader.Close();
                 Console.WriteLine("last frame in replay was " + lastWrittenFrame);
                 return previousFrame + lastWrittenFrame - startFrame;
             }
-        }
-        public void updatePlayerJointStates(int c, int[][] jointsOfPlayers, string[] jointChanges)
-        {
-            for (int i = 0; i < jointChanges.Length; i = i + 2)
-            {
-                jointsOfPlayers[c][int.Parse(jointChanges[i])] = int.Parse(jointChanges[i + 1]);
-            }
-            
         }
         public static string retRplPath(string path)
         {
@@ -345,16 +365,44 @@ namespace RplManager
             }
             return tmpstr;
         }
-        public void jointsToDefaultState()
+        public string updateJaggedArray(string line, int[][] jaggedArray, bool isGrip)
         {
-            for (int i = 0; i < jointStatesOfPlayers.Length; i++)
+            //Updates given jagged array and returns line with current values
+            string[] changesArray = line.Split("; ");
+            int indexOfPlayer = (int)Char.GetNumericValue((changesArray[0])[(changesArray[0]).Length - 1]);
+            changesArray = changesArray[1].Split(" ");
+            for (int i = 0; i < changesArray.Length; i++)
             {
-                jointStatesOfPlayers[i] = new int[20];
-                for (int j = 0; j < jointStatesOfPlayers[i].Length; j++)
+                if (isGrip)
                 {
-                    jointStatesOfPlayers[i][j] = 4;
+                    jaggedArray[indexOfPlayer][i] = int.Parse(changesArray[i]); ;
+                }
+                else
+                {
+                    jaggedArray[indexOfPlayer][int.Parse(changesArray[i])] = int.Parse(changesArray[i + 1]);
+                    i++;
+                }
+            }
+            return jointsToStr(jaggedArray[indexOfPlayer], line);
+        }
+        public void jaggedArrayResetValues(int[][] jagArr, int defaultValue)
+        {
+            //Resets arrays of given jagged array to their default values
+            for (int i = 0; i < jagArr.Length; i++)
+            {
+                for (int j = 0; j < jagArr[i].Length; j++)
+                {
+                    jagArr[i][j] = defaultValue;
                 }
             }
         }
+        public void jaggedArrayCreateEmptyArray(int[][] jagArr, int size)
+        {
+            //Fills given jagged array with arrays of given size
+            for (int i = 0; i < jagArr.Length; i++)
+            {
+                jagArr[i] = new int[size];
+            }
+        }  
     }
 }
