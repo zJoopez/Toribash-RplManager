@@ -170,7 +170,7 @@ namespace RplManager
             int currentFrame = 0;
             int lastWrittenFrame = 0;
             bool writeInfo = true;
-            bool addStartGripStates = true;
+            bool addStartStartStates = true;
             StreamWriter writer;  
             if (firstIteration)
             {
@@ -214,7 +214,7 @@ namespace RplManager
                         if (currentFrame > startFrame)
                         {
                             allowWrite = true;
-                            //Sets closest frame to start frame as first frame to prevent missing frame 0
+                            //If past start frame, sets closest frame to start frame as first frame to prevent missing frame 0
                             if (firstIteration)
                             {
                                 startFrame = currentFrame;
@@ -245,9 +245,9 @@ namespace RplManager
                     {
                         writer.WriteLine(line);
                     }
-                    //Writes grip states on first frame to carry over grips toggled before this frame
-                    if (currentFrame > startFrame & addStartGripStates)
+                    if (currentFrame >= startFrame && addStartStartStates && allowWrite)
                     {
+                        //Writes grip states on first frame to carry over grips toggled before this frame
                         string tmpLine;
                         for (int i = 0; i < gripStatesOfPlayers.Length; i++)
                         {
@@ -258,7 +258,17 @@ namespace RplManager
                             }
                             writer.WriteLine(tmpLine);
                         }
-                        addStartGripStates = false;
+                    }
+                    if (currentFrame >= startFrame && addStartStartStates && allowWrite)
+                    {
+                        //Writes joint states on first frame to carry over joint states before this frame
+                        string tmpLine;
+                        for (int i = 0; i < jointStatesOfPlayers.Length; i++)
+                        {
+                            tmpLine = jointsToStr(jointStatesOfPlayers[i], "JOINT " + i + ";");
+                            writer.WriteLine(tmpLine);
+                        }
+                        addStartStartStates = false;
                     }
                 }
                 //Disables all grips on last frame (prevents bugs if grab target changes)
