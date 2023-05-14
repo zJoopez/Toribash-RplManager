@@ -192,7 +192,7 @@ namespace RplManager
                     {
                         allowWrite = true;
                     }
-                    if (line.Contains("FRAME 0;") && startFrame > 0)
+                    if (line.Contains("FRAME 0;"))
                     {
                         writeInfo = false;
                         allowWrite = false;
@@ -201,17 +201,12 @@ namespace RplManager
                     {
                         tmpSplit = line.Split(' ');
                         currentFrame = Convert.ToInt32(tmpSplit[1].Trim(';'));
-                        if (currentFrame > endFrame)
+                        if (currentFrame >= endFrame)
                         {
                             allowWrite = false;
-                            lastWrittenFrame = currentFrame;
                             break; 
                         }
-                        else
-                        {
-                            lastWrittenFrame = currentFrame;
-                        }
-                        if (currentFrame > startFrame)
+                        if (currentFrame >= startFrame && firstIteration || currentFrame > startFrame && !firstIteration)
                         {
                             allowWrite = true;
                             //If past start frame, sets closest frame to start frame as first frame to prevent missing frame 0
@@ -244,8 +239,9 @@ namespace RplManager
                     if (allowWrite)
                     {
                         writer.WriteLine(line);
+                        lastWrittenFrame = currentFrame;
                     }
-                    if (currentFrame >= startFrame && addStartStartStates && allowWrite)
+                    if (currentFrame >= startFrame && addStartStartStates && allowWrite && !writeInfo)
                     {
                         //Writes grip states on first frame to carry over grips toggled before this frame
                         string tmpLine;
@@ -258,11 +254,7 @@ namespace RplManager
                             }
                             writer.WriteLine(tmpLine);
                         }
-                    }
-                    if (currentFrame >= startFrame && addStartStartStates && allowWrite)
-                    {
                         //Writes joint states on first frame to carry over joint states before this frame
-                        string tmpLine;
                         for (int i = 0; i < jointStatesOfPlayers.Length; i++)
                         {
                             tmpLine = jointsToStr(jointStatesOfPlayers[i], "JOINT " + i + ";");
